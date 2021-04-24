@@ -8,4 +8,6 @@ It's small and simple, but has some interesting features.
 
 ## Full Details
 
-See the documentation on [crates.io](https://crates.io/crates/ap).
+See the documentation [here][docs].
+
+[docs]: https://docs.rs/ap

@@ -1,3 +1,8 @@
+// Copyright (c) 2021 James O. D. Hunt.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 /// A simple example showing how to handle options that need arguments.
 use ap::{App, Arg, Args, Handler, Need, Result};
 

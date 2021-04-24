@@ -1,3 +1,8 @@
+// Copyright (c) 2021 James O. D. Hunt.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 

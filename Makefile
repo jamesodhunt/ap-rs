@@ -1,3 +1,8 @@
+# Copyright (c) 2021 James O. D. Hunt.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 ifneq ($(DEBUG),)
     CARGO_TEST_ARGS = -vv -- --nocapture
     # XXX: Note: don't quote the value, or it won't work!

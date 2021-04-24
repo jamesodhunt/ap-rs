@@ -1,3 +1,8 @@
+// Copyright (c) 2021 James O. D. Hunt.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 /// An example showing how to handle positional arguments and options.
 use ap::{App, Arg, Args, Handler, Need, Result, POSITIONAL_HANDLER_OPT};
 

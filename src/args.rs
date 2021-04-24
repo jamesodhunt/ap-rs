@@ -1,3 +1,8 @@
+// Copyright (c) 2021 James O. D. Hunt.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 use std::cell::RefCell;
 use std::collections::{hash_map::Entry, HashMap};
 use std::env;

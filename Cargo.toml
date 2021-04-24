@@ -1,0 +1,21 @@
+[package]
+name = "ap"
+version = "0.1.0"
+authors = ["James O. D. Hunt <jamesodhunt@gmail.com>"]
+edition = "2018"
+description = "Simple argument parsing for the command-line"
+readme = "README.md"
+homepage = "https://github.com/jamesodhunt/ap-rs"
+repository = "https://github.com/jamesodhunt/ap-rs"
+license = "Apache-2.0"
+keywords = [
+	"arg",
+	"argument",
+	"cli",
+	"getopt",
+	"parser",
+]
+categories = ["command-line-interface"]
+
+[dependencies]
+thiserror = "1.0"

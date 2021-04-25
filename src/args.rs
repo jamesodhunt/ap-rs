@@ -621,7 +621,22 @@ impl<'a> App<'a> {
                     if let Some(h) = self.handler.clone() {
                         // Call the handler
                         arg.count += 1;
-                        h.borrow_mut().handle(arg.clone())?;
+
+                        // Pass a copy of the unknown Arg (which is
+                        // generic) to the handler function for the _specific_
+                        // unknown option found.
+                        //
+                        // This is simple, but has the downside of not having
+                        // an accurate `.count` value. We could handle this in
+                        // a better way (maybe by adding an `Arg` for each
+                        // unknown option found?), but if we do that, we
+                        // should also mark those `Arg`'s somehow to show they
+                        // were "auto-added" rather than being added by the
+                        // caller.
+                        let mut option_specific = arg.clone();
+                        option_specific.option = option;
+
+                        h.borrow_mut().handle(option_specific)?;
                     }
                 } else if self.settings.ignore_unknown_options {
                     continue;
@@ -1598,7 +1613,7 @@ mod tests {
         args.add(Arg::new('d'));
         args.add(unknown_opts_arg);
 
-        let cli_args = vec!["-d", "-a", "-b", "-c", "-d"];
+        let cli_args = vec!["-d", "-a", "-b", "-r", "-d"];
 
         let string_args = cli_args.clone().into_iter().map(String::from).collect();
 
@@ -1619,6 +1634,11 @@ mod tests {
         // '-d' was specified twice and '-?' was specified three times
         let expected_count = (1 + 2) + (1 + 2 + 3);
         assert_eq!(handler.count, expected_count);
+
+        assert_eq!(handler.a_count, 1);
+        assert_eq!(handler.b_count, 1);
+        assert_eq!(handler.d_count, 2);
+        assert_eq!(handler.r_count, 1);
     }
 
     #[test]

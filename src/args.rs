@@ -82,10 +82,25 @@ impl Need {
 pub trait Handler {
     /// Function that will handle all registered options.
     ///
-    /// `arg` provide details of the argument found on the command-line.
-    ///
     /// Since the handler is provided with a mutable reference to itself,
     /// it can store and modify its state when called.
+    ///
+    /// # Parameters
+    ///
+    /// `arg` - The [Arg] provides details of the argument found
+    ///         on the command-line.
+    ///
+    /// # Return value
+    //
+    /// - If the handler logic succeeds, return `Ok(())`.
+    /// - If the handler needs to fail, it should return one of the [Error]
+    ///   values. If the main errors are not appropriate, make the handler
+    ///   return [Error::HandlerError].
+    ///
+    /// # Notes
+    ///
+    /// If a handler call fails, the command-line parsing will
+    /// stop and the error will be returned to the caller of the parsing function.
     fn handle(&mut self, arg: Arg) -> Result<()>;
 }
 

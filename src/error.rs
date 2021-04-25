@@ -5,7 +5,8 @@
 
 use thiserror::Error;
 
-/// The error type.
+/// The error type that represents all possible parse errors
+/// and handler errors.
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum Error {
     //------------------------------
@@ -58,6 +59,11 @@ pub enum Error {
     /// (`-v` rather than, say, `--verbose`).
     #[error("long options not supported")]
     NoLongOpts,
+
+    /// Custom error that a handler can use if the other errors are not
+    /// appropriate.
+    #[error("handler error: {0:?}")]
+    HandlerError(String),
 
     /// An unknown error (used for testing).
     #[error("generic error: {0:?}")]

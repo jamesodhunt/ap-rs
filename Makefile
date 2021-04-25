@@ -28,6 +28,7 @@ examples:
 	cargo run --example simple -- -a foo -d -a bar -d -a baz
 	cargo run --example positional-args-only -- one two "hello world" three "foo bar" four "the end"
 	cargo run --example option-and-positional-args -- "posn 1" -d "posn 2" -a "hello world" -a "foo bar" "the end" -d
+	cargo run --example error-handler -- -a -e -i -o -u
 
 doc:
 	cargo doc

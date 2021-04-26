@@ -28,7 +28,13 @@ examples:
 	cargo run --example simple -- -a foo -d -a bar -d -a baz
 	cargo run --example positional-args-only -- one two "hello world" three "foo bar" four "the end"
 	cargo run --example option-and-positional-args -- "posn 1" -d "posn 2" -a "hello world" -a "foo bar" "the end" -d
+	@echo "INFO: Running error handler example with valid options (expecting success)"
 	cargo run --example error-handler -- -a -e -i -o -u
+	@echo "INFO: Running error handler example with invalid options (expecting failure)"
+	@sh -c '{ cargo run --example error-handler -- -a -e -i -o -u -z; ret=$$?; } || true; \
+		[ "$$ret" -ne 0 ] || \
+		{ echo >&2 "ERROR: handler should fail with non-vowel option"; exit 1; }'
+	@echo "INFO: All examples ran as expected"
 
 doc:
 	cargo doc

@@ -248,7 +248,7 @@
 //!     let result = args.parse();
 //!
 //!     // If you want to inspect the handler after parsing, you need to
-//!     // force ownership to be returned by dropping the [Args] variable.
+//!     // force ownership to be returned by dropping the `Args` variable.
 //!     drop(args);
 //!
 //!     println!("Final state of handler: {:?}", handler);
@@ -258,12 +258,13 @@
 //! }
 //! ```
 //!
-//! For further examples, try out the programs in the `examples/` directory:
+//! For further examples, try out the programs in the [`examples/`](https://github.com/jamesodhunt/ap-rs/tree/main/examples) directory:
 //!
 //! ```bash
 //! $ cargo run --example simple -- -a foo -d -a bar -d -a baz
 //! $ cargo run --example positional-args-only -- one two "hello world" three "foo bar" four "the end"
 //! $ cargo run --example option-and-positional-args -- "posn 1" -d "posn 2" -a "hello world" -a "foo bar" "the end" -d
+//! $ cargo run --example error-handler -- -a -e -i -o -u
 //! ```
 //!
 //! # Details

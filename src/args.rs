@@ -357,21 +357,6 @@ pub struct App<'a> {
     handler: Option<Rc<RefCell<Box<dyn Handler + 'a>>>>,
 }
 
-//impl<'a> fmt::Debug for App<'a> {
-//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//        let handler = match self.handler.as_ref() {
-//            Some(h) => format!("Some(handler[{:p}])", h),
-//            None => "None".to_string(),
-//        };
-
-//        write!(f, "App: name: {}, version: {:?}, summary: {:?}, help: {:?}, notes: {:?}, settings: {:?}, args: {:?}, handler: {:?}", self.name, self.version, self.summary, self.help, self.notes, self.settings, self.args, handler)
-//    }
-//}
-
-//impl<'a> PartialEq for App<'a> {
-
-//}
-
 impl<'a> App<'a> {
     /// Create a new application object.
     pub fn new(name: &str) -> Self {

@@ -7,12 +7,16 @@ use std::cell::RefCell;
 use std::collections::{hash_map::Entry, HashMap};
 use std::env;
 use std::fmt;
+use std::io::Write;
 use std::rc::Rc;
 
 use crate::error::{Error, Result};
 
 const OPT_PREFIX: char = '-';
 const HELP_OPTION: &str = "-h";
+
+/// String to show in usage if an option is required
+const REQUIRED_STR: &str = " (required)";
 
 /// Special argument that is silently consumed and used to denote the end of
 /// all options; all arguments that follow are considered to be positional
@@ -208,20 +212,20 @@ impl fmt::Display for Arg {
         let value = if self.needs == Need::Argument {
             " <value>"
         } else {
-            "        "
+            ""
         };
+
+        let required = if self.required { REQUIRED_STR } else { "" };
 
         let help: String = match &self.help {
             Some(help) => format!(" # {}", help),
             _ => "".into(),
         };
 
-        //let help = if Some(self.help) { help } else { "" };
-
         write!(
             f,
-            "{}{}{}{} {}",
-            USAGE_PREFIX_SPACES, OPT_PREFIX, self.option, value, help
+            "{}{}{}{}{}",
+            OPT_PREFIX, self.option, value, required, help
         )
     }
 }
@@ -449,15 +453,23 @@ impl<'a> App<'a> {
     ///
     /// This is called automatically when the user specifies `-h` _anywhere_
     /// on the command line; you do not need to register an [Arg] for `-h`.
-    pub fn generate_help(&self) -> Result<()> {
-        println!("NAME:\n{}{}\n", USAGE_PREFIX_SPACES, self.name);
+    pub fn generate_help<W>(&self, writer: &mut W) -> Result<()>
+    where
+        W: Write + Send + Sync + 'static,
+    {
+        let mut lines = Vec::<String>::new();
+
+        let line = format!("NAME:\n{}{}\n", USAGE_PREFIX_SPACES, self.name);
+        lines.push(line);
 
         if !self.version.is_empty() {
-            println!("VERSION:\n{}\n", self.version);
+            let line = format!("VERSION:\n{}{}\n", USAGE_PREFIX_SPACES, self.version);
+            lines.push(line);
         }
 
         if !self.summary.is_empty() {
-            println!("{}{}\n", USAGE_PREFIX_SPACES, self.summary);
+            let line = format!("SUMMARY:\n{}{}\n", USAGE_PREFIX_SPACES, self.summary.trim());
+            lines.push(line);
         }
 
         let have_posn_handler = self.args.get(POSITIONAL_HANDLER_OPT).is_some();
@@ -467,13 +479,20 @@ impl<'a> App<'a> {
             false => "",
         };
 
-        println!("USAGE:");
-        println!(
-            "{}{} [FLAGS]{}\n",
-            USAGE_PREFIX_SPACES, self.name, posn_args
-        );
+        lines.push("USAGE:".into());
 
-        println!("FLAGS:");
+        let name: String = if self.name.is_empty() {
+            env::args().collect::<Vec<String>>().pop().unwrap()
+        } else {
+            self.name.clone()
+        };
+
+        let line = format!("{}{} [FLAGS]{}\n", USAGE_PREFIX_SPACES, name, posn_args);
+        lines.push(line);
+
+        //------------------------------------------------------------
+
+        lines.push("FLAGS:".into());
 
         let mut keys: Vec<char> = self
             .args
@@ -492,12 +511,14 @@ impl<'a> App<'a> {
             let arg = arg_ref.borrow();
 
             if arg.needs == Need::Nothing {
-                println!("{}", arg);
+                let line = format!("{}{}", USAGE_PREFIX_SPACES, arg.to_string());
+                lines.push(line);
             }
         }
 
-        println!();
-        println!("OPTIONS:");
+        //------------------------------------------------------------
+
+        lines.push("\nOPTIONS:".into());
 
         for key in keys {
             let arg_ref = self.args.entries.get(&key).unwrap();
@@ -505,15 +526,29 @@ impl<'a> App<'a> {
             let arg = arg_ref.borrow();
 
             if arg.needs != Need::Nothing {
-                println!("{}", arg);
+                let line = format!("{}{}", USAGE_PREFIX_SPACES, arg.to_string());
+                lines.push(line);
             }
         }
 
-        if !self.notes.is_empty() {
-            println!("{}{}\n", USAGE_PREFIX_SPACES, self.notes);
+        //------------------------------------------------------------
+
+        if !self.help.is_empty() {
+            let line = format!("\nHELP:\n\n{}", self.help.trim());
+            lines.push(line);
         }
 
-        println!();
+        if !self.notes.is_empty() {
+            let line = format!("\nNOTES:\n\n{}", self.notes.trim());
+            lines.push(line);
+        }
+
+        // Join all the lines together, remove white space at either and and
+        // finally append a single newline.
+        let mut final_lines = lines.join("\n").trim().to_string();
+        final_lines.push('\n');
+
+        writeln!(writer, "{}", final_lines)?;
 
         Ok(())
     }
@@ -546,7 +581,7 @@ impl<'a> App<'a> {
         // Show help if requested.
         for cli_arg in cli_args.iter() {
             match cli_arg.as_str() {
-                HELP_OPTION => return self.generate_help(),
+                HELP_OPTION => return self.generate_help(&mut std::io::stdout()),
                 // No more options so help was not requested
                 END_OF_OPTIONS => break,
                 _ => (),
@@ -740,6 +775,53 @@ impl<'a> App<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use regex::Regex;
+    use std::sync::{Arc, Mutex};
+
+    /// Writer that stores all data written to it.
+    #[derive(Default, Clone)]
+    struct BufWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl std::io::Write for BufWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().write(buf)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.0.lock().unwrap().flush()
+        }
+    }
+
+    #[allow(dead_code)]
+    impl BufWriter {
+        fn new() -> Self {
+            BufWriter::default()
+        }
+
+        fn clear(&mut self) {
+            self.0.lock().unwrap().clear();
+        }
+
+        fn len(&mut self) -> usize {
+            self.0.lock().unwrap().len()
+        }
+
+        fn capacity(&mut self) -> usize {
+            self.0.lock().unwrap().capacity()
+        }
+    }
+
+    impl ToString for BufWriter {
+        fn to_string(&self) -> String {
+            let data_ref = self.0.clone();
+            let output = data_ref.lock().unwrap();
+            let s = (*output).clone();
+            let output = String::from_utf8(s).unwrap();
+
+            output
+        }
+    }
 
     #[test]
     fn test_requirement() {
@@ -2006,5 +2088,110 @@ mod tests {
         assert_eq!(app.notes, "");
         app = app.notes(notes);
         assert_eq!(app.notes, notes);
+    }
+
+    #[test]
+    fn test_generate_help() {
+        let mut writer = BufWriter::new();
+
+        let mut args = Args::default();
+
+        // flags
+        args.add(Arg::new('d').help("enable debug"));
+        args.add(Arg::new('e').required());
+        args.add(Arg::new('f').required().help("force mode"));
+
+        // options
+        args.add(Arg::new('n').needs(Need::Argument));
+        args.add(Arg::new('r').needs(Need::Argument).required());
+        args.add(
+            Arg::new('s')
+                .needs(Need::Argument)
+                .required()
+                .help("silly option"),
+        );
+
+        let flags_re = concat!(
+            r#"FLAGS:\n"#,
+            r#"\s+-d # enable debug\n"#,
+            r#"\s+-e \(required\)\n"#,
+            r#"\s+-f \(required\) # force mode\n"#,
+        );
+
+        let options_re = concat!(
+            r#"OPTIONS:\n"#,
+            r#"\s+-n <value>\n"#,
+            r#"\s+-r <value> \(required\)\n"#,
+            r#"\s+-s <value> \(required\) # silly option\n"#,
+        );
+
+        //--------------------
+
+        let name = "my app";
+        let name_re = format!(r#"NAME:\n\s+{}\n"#, name);
+
+        let version = "1.2.3-alpha4";
+        let version_re = format!(r"VERSION:\n\s+{}\n", version);
+
+        let summary = "This is one awesome app";
+        let summary_re = format!(r"SUMMARY:\n\s+{}\n", summary);
+
+        let help = concat!(
+            "help line 1\n",
+            "help line 2\n",
+            "help line 3\n",
+            "help last line\n"
+        );
+        let help_re = format!(r"HELP:\n\s+{}\n", help);
+
+        let notes = concat!(
+            "notes line 1\n",
+            "notes line 2\n",
+            "notes line 3\n",
+            "notes last line\n"
+        );
+
+        let notes_re = format!(r"NOTES:\n\s+{}\n", notes);
+
+        //--------------------
+
+        let mut handler = OkHandler::default();
+
+        let app = App::new(name)
+            .summary(summary)
+            .version(version)
+            .help(help)
+            .notes(notes)
+            .args(args)
+            .handler(Box::new(&mut handler));
+
+        let result = app.generate_help(&mut writer);
+
+        drop(app);
+
+        assert!(result.is_ok());
+
+        let value = writer.to_string();
+
+        let re = Regex::new(&name_re).unwrap();
+        assert!(re.is_match(&value));
+
+        let re = Regex::new(&version_re).unwrap();
+        assert!(re.is_match(&value));
+
+        let re = Regex::new(&summary_re).unwrap();
+        assert!(re.is_match(&value));
+
+        let re = Regex::new(&help_re).unwrap();
+        assert!(re.is_match(&value));
+
+        let re = Regex::new(&notes_re).unwrap();
+        assert!(re.is_match(&value));
+
+        let re = Regex::new(&flags_re).unwrap();
+        assert!(re.is_match(&value));
+
+        let re = Regex::new(&options_re).unwrap();
+        assert!(re.is_match(&value));
     }
 }

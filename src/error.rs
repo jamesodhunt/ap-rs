@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::io;
 use thiserror::Error;
 
 /// The error type that represents all possible parse errors
 /// and handler errors.
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[derive(Error, Debug)]
 pub enum Error {
     //------------------------------
     // Incorrect API usage errors (programmer error)
@@ -68,6 +69,10 @@ pub enum Error {
     /// An unknown error (used for testing).
     #[error("generic error: {0:?}")]
     GenericError(String),
+
+    /// An I/O error
+    #[error("I/O error: {0:?}")]
+    IOError(#[from] io::Error),
 }
 
 /// Convenience type that allows a function to be defined as returning a

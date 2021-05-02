@@ -21,7 +21,8 @@
 //! * [Quickstart](#quickstart)
 //! * [Examples](#examples)
 //! * [Details](#details)
-//! * [Terminology](#terminology)
+//!   * [Terminology](#terminology)
+//!   * [Handling ambiguity](#handling-ambiguity)
 //! * [Rationale](#rationale)
 //! * [Summary of features and behaviour](#summary-of-features-and-behaviour)
 //! * [Limitations](#limitations)
@@ -385,6 +386,45 @@
 //! '-x 'awesome value'' # An option ('x') with a string option argument ('awesome value').
 //! '-v 'the end''       # An option('v') with a string option argument ('the end').
 //! ```
+//!
+//! ## Handling ambiguity
+//!
+//! By default, `getopt(3)` semantics are used, which means there is no
+//! ambiguity when parsing arguments: if an [Arg] is declared that specifies
+//! [Need::Argument], the next argument after the option argument (whatever it
+//! is!) is consumed and used as the options argument.
+//!
+//! Although not ambiguous, this could be surprising for users, since other
+//! (generally newer) command-line arguments parsers work in a subtly
+//! different way. For example, imagine the program specified the following:
+//!
+//! ```rust
+//! # use ap::{App, Arg, Args, Handler, Need, Result};
+//! #
+//! let mut args = Args::default();
+//!
+//! args.add(Arg::new('1'));
+//! args.add(Arg::new('2').needs(Need::Argument));
+//! ```
+//!
+//! If the program was then called as follows...
+//!
+//! ```bash
+//! $ prog -2 -1
+//! ```
+
+//! ... the _value_ for the `-2` option will be set to `-1`, and the `-1`
+//! option will assume to no thave been specified. This is how `getopt(3)`
+//! works. However, this may not be what the user envisaged, or the programmer
+//! desires.
+//!
+//! The alternative strategy when parsing the command-line above is to treat
+//! options as more important than arguments and error in this case since the
+//! `-2` option was not provided with an argument (because the `-1` _option_
+//! was specified before a valid option argument.
+//!
+//! For further details on this subtlety, see the `no_strict_options()` method
+//! for [App] or [Settings].
 //!
 //! # Rationale
 //!

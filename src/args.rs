@@ -240,6 +240,14 @@ pub struct Settings {
     /// If set and no [POSITIONAL_HANDLER_OPT] [Arg] has been registered,
     /// ignore positional arguments rather than erroring.
     ignore_unknown_posn_args: bool,
+
+    /// Don't automatically consume the argument immediately _after_
+    /// a [Need::Argument] option. This effectively stops option _values_ from
+    /// starting with a dash which is permitted by `getopt(3)`.
+    ///
+    /// > **Notes:** Setting this to `true` means the parsing will
+    /// > no longer be "`getopt`-like".
+    no_strict_options: bool,
 }
 
 impl Settings {
@@ -262,6 +270,66 @@ impl Settings {
     pub fn ignore_unknown_posn_args(self) -> Self {
         Settings {
             ignore_unknown_posn_args: true,
+            ..self
+        }
+    }
+
+    /// By default, arguments are parsed as they would be by `getopt(3)`
+    /// whereby if an option is marked as requiring a value
+    /// ([Need::Argument]) and the option is found on the command line, the
+    /// next argument (whether it starts with a dash or not!) is "consumed" as
+    /// the options argument.
+    ///
+    /// However, when this setting is enabled, option values cannot start with
+    /// a dash.
+    ///
+    /// # Advice
+    ///
+    /// - If you want to your program to behave like the traditional `getopt(3)`,
+    ///   leave this setting unset.
+    /// - If you need your program to accept an argument starting with a dash
+    ///   (for example, you have an option which could accept a negative
+    ///   number), you should leave this setting unset.
+    /// - If your program provides options and flags and you wish to minimse
+    ///   the chance of a flag (particularly a numeric flag such as `-1` or `-2`)
+    ///   being interpreted as an options value, consider setting this option to
+    ///   disable support for option values starting with a dash.
+    ///
+    /// # Example
+    ///
+    /// If a program accepts a flag (`-f`) and an option that
+    /// requires an value (`-r <value>`) and the following command-line is
+    /// specified to the program...
+    ///
+    /// ```bash
+    /// $ prog -r -f
+    /// ```
+    ///
+    /// ... the outcome of the parse will depend on this setting:
+    ///
+    /// - If `no_strict_options=false` (the default), the command line will be
+    ///   passed successfully and the `r` option ([Arg]) will be given the value
+    ///   "`-f`" and the `f` option ([Arg]) will be considered to not have been
+    ///   specified.
+    ///
+    ///   > **Note:**
+    ///   >
+    ///   > This is how the POSIX command line argument `getopt(3)` works.
+    ///
+    /// - If `no_strict_options=true`, the parse will fail with the error
+    ///   `Error::MissingOptArg` since in this mode, option values may not begin
+    ///   with a dash so the `-f` is treated as the next argument meaning the
+    ///   user forgot to specify a value for the previous argument (`-r`), which
+    ///   is an error.
+    ///
+    ///   > **Note:**
+    ///   >
+    ///   > This is an alternative behaviour adopted by some modern
+    ///   > command line argument parsers.
+    ///
+    pub fn no_strict_options(self) -> Self {
+        Settings {
+            no_strict_options: true,
             ..self
         }
     }
@@ -449,6 +517,24 @@ impl<'a> App<'a> {
         }
     }
 
+    /// If set, disallow option values from starting with as dash.
+    ///
+    /// See the [Settings] method of the same name for full details
+    /// and an example showing the effect of this call.
+    ///
+    /// # Note
+    ///
+    /// This is an alternative to calling the `settings()` method.
+    pub fn no_strict_options(self) -> Self {
+        App {
+            settings: Settings {
+                no_strict_options: true,
+                ..Default::default()
+            },
+            ..self
+        }
+    }
+
     /// Generate a help/usage statement from the registered [Arg]'s.
     ///
     /// This is called automatically when the user specifies `-h` _anywhere_
@@ -603,6 +689,32 @@ impl<'a> App<'a> {
                 if cli_arg == END_OF_OPTIONS {
                     end_of_options = true;
                     continue;
+                }
+
+                // Handle the (relatively rare) scenario where a option's
+                // _value_ starts with a dash.
+                if !self.settings.no_strict_options {
+                    if let Some(option) = current_option {
+                        if need == Need::Argument {
+                            if let Entry::Occupied(entry) = self.args.entries.entry(option) {
+                                let mut arg = entry.get().borrow_mut();
+
+                                // Save the value found
+                                arg.value = Some(cli_arg.into());
+
+                                if let Some(h) = self.handler.clone() {
+                                    // Call the handler
+                                    arg.count += 1;
+                                    h.borrow_mut().handle(arg.clone())?;
+                                }
+
+                                // Job done
+                                need = Need::Nothing;
+                                current_option = None;
+                                continue;
+                            }
+                        }
+                    }
                 }
 
                 if cli_arg.starts_with(LONG_OPT_PREFIX) {
@@ -839,13 +951,17 @@ mod tests {
 
         assert_eq!(new_settings.ignore_unknown_options, false);
         assert_eq!(new_settings.ignore_unknown_posn_args, false);
+        assert_eq!(new_settings.no_strict_options, false);
         assert_eq!(new_settings, def_settings);
 
         let settings = Settings::new()
             .ignore_unknown_options()
-            .ignore_unknown_posn_args();
+            .ignore_unknown_posn_args()
+            .no_strict_options();
+
         assert_eq!(settings.ignore_unknown_options, true);
         assert_eq!(settings.ignore_unknown_posn_args, true);
+        assert_eq!(settings.no_strict_options, true);
     }
 
     #[test]
@@ -1215,12 +1331,6 @@ mod tests {
                 result: Err(Error::MissingOptArg),
             },
             TestData {
-                cli_args: vec!["-r", "-d", "--"],
-                args: Some(vec![required_need_arg_opt.clone(), flag_opt.clone()]),
-                use_handler: true,
-                result: Err(Error::MissingOptArg),
-            },
-            TestData {
                 cli_args: vec![],
                 args: Some(vec![required_flag_opt.clone()]),
                 use_handler: true,
@@ -1493,7 +1603,7 @@ mod tests {
         args.add(need_arg_opt_2);
 
         // An incorrect CLI (since the '-b' option is missing its required arg)
-        let cli_args = vec!["-d", "-a", "foo bar", "-d", "-a", "hello world", "-b", "-d"];
+        let cli_args = vec!["-d", "-a", "foo bar", "-d", "-a", "hello world", "-b"];
 
         let string_args = cli_args.clone().into_iter().map(String::from).collect();
 
@@ -2088,6 +2198,13 @@ mod tests {
         assert_eq!(app.notes, "");
         app = app.notes(notes);
         assert_eq!(app.notes, notes);
+
+        let settings = Settings::new().no_strict_options();
+        let def_settings = Settings::new();
+        assert_eq!(app.settings, def_settings);
+
+        app = app.settings(settings);
+        assert_eq!(app.settings, settings);
     }
 
     #[test]
@@ -2289,6 +2406,141 @@ mod tests {
             let msg = format!("test[{}]: value: {:?}", i, value);
 
             assert!(value.starts_with("Handler: "), "{}", msg);
+        }
+    }
+
+    #[test]
+    fn test_no_strict_options() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            cli_args: Vec<&'a str>,
+            args: Vec<Arg>,
+            no_strict_options: bool,
+            result: Result<()>,
+            r_count: usize,
+            d_count: usize,
+            values: Vec<&'a str>,
+        }
+
+        let flag_opt = Arg::new('d').needs(Need::Nothing);
+        let need_arg_opt = Arg::new('r').needs(Need::Argument);
+
+        let tests = &[
+            TestData {
+                cli_args: vec!["-r", "foo", "-d"],
+                args: vec![flag_opt.clone(), need_arg_opt.clone()],
+                no_strict_options: false,
+                result: Ok(()),
+                r_count: 1,
+                d_count: 1,
+                values: vec!["foo"],
+            },
+            TestData {
+                cli_args: vec!["-r", "foo", "-d"],
+                args: vec![flag_opt.clone(), need_arg_opt.clone()],
+                no_strict_options: true,
+                result: Ok(()),
+                r_count: 1,
+                d_count: 1,
+                values: vec!["foo"],
+            },
+            //------------------------------
+            TestData {
+                cli_args: vec!["-r", "-d"],
+                args: vec![flag_opt.clone(), need_arg_opt.clone()],
+                no_strict_options: false,
+                result: Ok(()),
+                r_count: 1,
+                d_count: 0,
+                values: vec!["-d"],
+            },
+            TestData {
+                cli_args: vec!["-r", "-d"],
+                args: vec![flag_opt.clone(), need_arg_opt.clone()],
+                no_strict_options: true,
+                result: Err(Error::MissingOptArg),
+                r_count: 0,
+                d_count: 0,
+                values: vec![],
+            },
+            //------------------------------
+            TestData {
+                cli_args: vec!["-r", "--"],
+                args: vec![need_arg_opt.clone()],
+                no_strict_options: false,
+                result: Err(Error::MissingOptArg),
+                r_count: 0,
+                d_count: 0,
+                values: vec![],
+            },
+            TestData {
+                cli_args: vec!["-r", "--"],
+                args: vec![need_arg_opt.clone()],
+                no_strict_options: true,
+                result: Err(Error::MissingOptArg),
+                r_count: 0,
+                d_count: 0,
+                values: vec![],
+            },
+            //------------------------------
+            TestData {
+                cli_args: vec!["-r", "-d", "--"],
+                args: vec![need_arg_opt.clone()],
+                no_strict_options: false,
+                result: Ok(()),
+                r_count: 1,
+                d_count: 0,
+                values: vec!["-d"],
+            },
+            TestData {
+                cli_args: vec!["-r", "-d", "--"],
+                args: vec![need_arg_opt.clone()],
+                no_strict_options: true,
+                result: Err(Error::MissingOptArg),
+                r_count: 0,
+                d_count: 0,
+                values: vec![],
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let string_args: Vec<String> =
+                d.cli_args.clone().into_iter().map(String::from).collect();
+
+            let mut args = Args::default();
+            args.set(d.args.clone());
+
+            let mut handler = ModifyHandler::default();
+            let mut app = App::default().args(args).handler(Box::new(&mut handler));
+
+            if d.no_strict_options {
+                app = app.no_strict_options();
+            }
+
+            let result = app.parse_with_args(string_args);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if result.is_err() {
+                assert!(d.result.is_err(), "{}", msg);
+
+                let expected_err = format!("{:?}", d.result.as_ref().err());
+                let actual_err = format!("{:?}", result.as_ref().err());
+                assert_eq!(expected_err, actual_err, "{}", msg);
+
+                continue;
+            }
+
+            assert!(result.is_ok(), "{}", msg);
+
+            drop(app);
+
+            assert_eq!(d.r_count, handler.r_count);
+            assert_eq!(d.d_count, handler.d_count);
+
+            let v: Vec<String> = d.values.clone().into_iter().map(String::from).collect();
+            assert_eq!(v, handler.v);
         }
     }
 }

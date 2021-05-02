@@ -12,6 +12,7 @@ description = "Simple argument parsing for the command-line"
 readme = "README.md"
 homepage = "https://github.com/jamesodhunt/ap-rs"
 repository = "https://github.com/jamesodhunt/ap-rs"
+documentation = "https://docs.rs/ap/"
 license = "Apache-2.0"
 keywords = [
 	"arg",

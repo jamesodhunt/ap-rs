@@ -2194,4 +2194,101 @@ mod tests {
         let re = Regex::new(&options_re).unwrap();
         assert!(re.is_match(&value));
     }
+
+    #[test]
+    fn test_get_args() {
+        let get_args_result = get_args();
+
+        let mut args: Vec<String> = env::args().collect();
+        args.remove(0);
+
+        assert_eq!(get_args_result, args);
+    }
+
+    #[test]
+    fn test_arg_display() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            arg: Arg,
+            display: &'a str,
+        }
+
+        let tests = &[
+            TestData {
+                arg: Arg::new('d'),
+                display: "-d",
+            },
+            TestData {
+                arg: Arg::new('d').required(),
+                display: "-d (required)",
+            },
+            //------------------------------
+            TestData {
+                arg: Arg::new('d').needs(Need::Nothing),
+                display: "-d",
+            },
+            TestData {
+                arg: Arg::new('d').required().needs(Need::Nothing),
+                display: "-d (required)",
+            },
+            //------------------------------
+            TestData {
+                arg: Arg::new('r').needs(Need::Argument),
+                display: "-r <value>",
+            },
+            TestData {
+                arg: Arg::new('r').needs(Need::Argument).required(),
+                display: "-r <value> (required)",
+            },
+            //------------------------------
+            TestData {
+                arg: Arg::new('r').needs(Need::Argument),
+                display: "-r <value>",
+            },
+            TestData {
+                arg: Arg::new('r').needs(Need::Argument).required(),
+                display: "-r <value> (required)",
+            },
+            //------------------------------
+            TestData {
+                arg: Arg::new('d').help("some help text"),
+                display: "-d # some help text",
+            },
+            TestData {
+                arg: Arg::new('d').required().help("some help text"),
+                display: "-d (required) # some help text",
+            },
+            //------------------------------
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let value = format!("{:}", d.arg);
+
+            let msg = format!("test[{}]: {:?}, value: {:?}", i, d, value);
+
+            assert_eq!(value, d.display, "{}", msg);
+        }
+    }
+
+    #[test]
+    fn test_handler_display() {
+        let mut ok_handler = OkHandler::default();
+        let mut mod_handler = ModifyHandler::default();
+        let mut err_handler = ErrHandler::default();
+
+        let mut handlers: Vec<Box<dyn Handler>> = Vec::new();
+        handlers.push(Box::new(&mut ok_handler));
+        handlers.push(Box::new(&mut err_handler));
+        handlers.push(Box::new(&mut mod_handler));
+
+        for (i, handler) in handlers.iter().enumerate() {
+            let p = handler;
+
+            let value = format!("{:?}", p);
+
+            let msg = format!("test[{}]: value: {:?}", i, value);
+
+            assert!(value.starts_with("Handler: "), "{}", msg);
+        }
+    }
 }

@@ -619,6 +619,22 @@ impl<'a> App<'a> {
 
         //------------------------------------------------------------
 
+        let pos_arg = self.args.entries.get(&POSITIONAL_HANDLER_OPT);
+        if let Some(arg) = pos_arg {
+            lines.push("\nPOSITIONAL ARGUMENTS:\n".into());
+
+            // Extract the raw text to avoid the formatted Display version of
+            // Arg (which exposes the value of POSITIONAL_HANDLER_OPT and
+            // which also looks ugly).
+            if let Some(help_text) = arg.borrow().help.as_ref() {
+                lines.push(help_text.trim().into());
+            } else {
+                lines.push("Supported.".into());
+            }
+        }
+
+        //------------------------------------------------------------
+
         if !self.help.is_empty() {
             let line = format!("\nHELP:\n\n{}", self.help.trim());
             lines.push(line);
@@ -2228,6 +2244,12 @@ mod tests {
                 .help("silly option"),
         );
 
+        let posn_help = "I am the positional handler \
+             help text";
+
+        // positional parameters magic option
+        args.add(Arg::new(POSITIONAL_HANDLER_OPT).help(posn_help));
+
         let flags_re = concat!(
             r#"FLAGS:\n"#,
             r#"\s+-d # enable debug\n"#,
@@ -2240,6 +2262,11 @@ mod tests {
             r#"\s+-n <value>\n"#,
             r#"\s+-r <value> \(required\)\n"#,
             r#"\s+-s <value> \(required\) # silly option\n"#,
+        );
+
+        let pos_handler_re = concat!(
+            r#"POSITIONAL ARGUMENTS:\n\n"#,
+            r#"I am the positional handler help text"#
         );
 
         //--------------------
@@ -2309,6 +2336,11 @@ mod tests {
         assert!(re.is_match(&value));
 
         let re = Regex::new(&options_re).unwrap();
+        assert!(re.is_match(&value));
+
+        println!("FIXME: value: {:?}", value);
+
+        let re = Regex::new(&pos_handler_re).unwrap();
         assert!(re.is_match(&value));
     }
 

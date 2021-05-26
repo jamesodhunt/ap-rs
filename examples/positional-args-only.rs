@@ -37,7 +37,10 @@ fn main() -> Result<()> {
     );
 
     let mut args = Args::new();
-    args.add(Arg::new(POSITIONAL_HANDLER_OPT));
+    args.add(Arg::new(POSITIONAL_HANDLER_OPT).help(
+        "I am the optional help text \
+         for the positional argument handler.",
+    ));
 
     let mut app = App::default()
         .help("some text")

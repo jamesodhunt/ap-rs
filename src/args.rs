@@ -544,6 +544,49 @@ impl<'a> App<'a> {
         W: Write + Send + Sync + 'static,
     {
         let mut lines = Vec::<String>::new();
+        let mut flag_lines = Vec::<String>::new();
+        let mut option_lines = Vec::<String>::new();
+
+        let mut keys: Vec<char> = self
+            .args
+            .entries
+            .iter()
+            .map(|(key, _)| *key)
+            .filter(|k| *k != POSITIONAL_HANDLER_OPT)
+            .collect();
+
+        keys.sort_unstable();
+
+        //------------------------------------------------------------
+        // Look for flags
+
+        for key in keys.clone() {
+            // Note: unwrap safe as 'keys' must be valid.
+            let arg_ref = self.args.entries.get(&key).unwrap();
+
+            let arg = arg_ref.borrow();
+
+            if arg.needs == Need::Nothing {
+                let line = format!("{}{}", USAGE_PREFIX_SPACES, arg.to_string());
+                flag_lines.push(line);
+            }
+        }
+
+        //------------------------------------------------------------
+        // Look for options
+
+        for key in keys {
+            let arg_ref = self.args.entries.get(&key).unwrap();
+
+            let arg = arg_ref.borrow();
+
+            if arg.needs != Need::Nothing {
+                let line = format!("{}{}", USAGE_PREFIX_SPACES, arg.to_string());
+                option_lines.push(line);
+            }
+        }
+
+        //------------------------------------------------------------
 
         let line = format!("NAME:\n{}{}\n", USAGE_PREFIX_SPACES, self.name);
         lines.push(line);
@@ -561,7 +604,7 @@ impl<'a> App<'a> {
         let have_posn_handler = self.args.get(POSITIONAL_HANDLER_OPT).is_some();
 
         let posn_args = match have_posn_handler {
-            true => " [ARGUMENT..]",
+            true => " [ARGUMENT]...",
             false => "",
         };
 
@@ -573,48 +616,39 @@ impl<'a> App<'a> {
             self.name.clone()
         };
 
-        let line = format!("{}{} [FLAGS]{}\n", USAGE_PREFIX_SPACES, name, posn_args);
+        let have_flags = !flag_lines.is_empty();
+        let have_options = !option_lines.is_empty();
+
+        let option_types = if have_flags && have_options {
+            "[FLAG/OPTION]..."
+        } else if have_flags {
+            "[FLAG]..."
+        } else if have_options {
+            "[OPTION]..."
+        } else {
+            ""
+        };
+
+        // Show what type of arguments the program supports.
+        let line = format!(
+            "{}{} {}{}\n",
+            USAGE_PREFIX_SPACES, name, option_types, posn_args
+        );
+
         lines.push(line);
 
         //------------------------------------------------------------
 
-        lines.push("FLAGS:".into());
+        if !flag_lines.is_empty() {
+            lines.push("FLAGS:".into());
 
-        let mut keys: Vec<char> = self
-            .args
-            .entries
-            .iter()
-            .map(|(key, _)| *key)
-            .filter(|k| *k != POSITIONAL_HANDLER_OPT)
-            .collect();
-
-        keys.sort_unstable();
-
-        for key in keys.clone() {
-            // Note: unwrap safe as 'keys' must be valid.
-            let arg_ref = self.args.entries.get(&key).unwrap();
-
-            let arg = arg_ref.borrow();
-
-            if arg.needs == Need::Nothing {
-                let line = format!("{}{}", USAGE_PREFIX_SPACES, arg.to_string());
-                lines.push(line);
-            }
+            lines.extend_from_slice(&flag_lines);
         }
 
-        //------------------------------------------------------------
+        if !option_lines.is_empty() {
+            lines.push("\nOPTIONS:".into());
 
-        lines.push("\nOPTIONS:".into());
-
-        for key in keys {
-            let arg_ref = self.args.entries.get(&key).unwrap();
-
-            let arg = arg_ref.borrow();
-
-            if arg.needs != Need::Nothing {
-                let line = format!("{}{}", USAGE_PREFIX_SPACES, arg.to_string());
-                lines.push(line);
-            }
+            lines.extend_from_slice(&option_lines);
         }
 
         //------------------------------------------------------------
@@ -2338,10 +2372,128 @@ mod tests {
         let re = Regex::new(&options_re).unwrap();
         assert!(re.is_match(&value));
 
-        println!("FIXME: value: {:?}", value);
-
         let re = Regex::new(&pos_handler_re).unwrap();
         assert!(re.is_match(&value));
+    }
+
+    // FIXME: Test could be improved by checking to also ensure that the other
+    // forms of usage are not displayed!
+    #[test]
+    fn test_generate_help_usage() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            args: Vec<Arg>,
+            usage: &'a str,
+        }
+
+        let tests = &[
+            TestData {
+                args: vec![Arg::new(POSITIONAL_HANDLER_OPT)],
+                usage: "[ARGUMENT]...",
+            },
+            //--------------------
+            TestData {
+                args: vec![Arg::new('d')],
+                usage: "[FLAG]...",
+            },
+            TestData {
+                args: vec![Arg::new('d'), Arg::new('e')],
+                usage: "[FLAG]...",
+            },
+            TestData {
+                args: vec![Arg::new('d').required()],
+                usage: "[FLAG]...",
+            },
+            TestData {
+                args: vec![Arg::new('d').required().needs(Need::Nothing)],
+                usage: "[FLAG]...",
+            },
+            TestData {
+                args: vec![Arg::new('d').required().needs(Need::Nothing), Arg::new('e')],
+                usage: "[FLAG]...",
+            },
+            TestData {
+                args: vec![Arg::new('d').needs(Need::Nothing), Arg::new('e')],
+                usage: "[FLAG]...",
+            },
+            //--------------------
+            TestData {
+                args: vec![Arg::new('a').needs(Need::Argument)],
+                usage: "[OPTION]...",
+            },
+            TestData {
+                args: vec![
+                    Arg::new('d').needs(Need::Argument),
+                    Arg::new('e').needs(Need::Argument),
+                ],
+                usage: "[OPTION]...",
+            },
+            TestData {
+                args: vec![Arg::new('d').needs(Need::Argument).required()],
+                usage: "[OPTION]...",
+            },
+            TestData {
+                args: vec![
+                    Arg::new('d').needs(Need::Argument).required(),
+                    Arg::new('e').needs(Need::Argument),
+                ],
+                usage: "[OPTION]...",
+            },
+            //--------------------
+            TestData {
+                args: vec![
+                    Arg::new('d').needs(Need::Nothing),
+                    Arg::new('e').needs(Need::Argument),
+                ],
+                usage: "[FLAG/OPTION]...",
+            },
+            TestData {
+                args: vec![
+                    Arg::new('d').needs(Need::Nothing),
+                    Arg::new(POSITIONAL_HANDLER_OPT),
+                ],
+                usage: "[FLAG]... [ARGUMENT]...",
+            },
+            TestData {
+                args: vec![
+                    Arg::new(POSITIONAL_HANDLER_OPT),
+                    Arg::new('e').needs(Need::Argument),
+                ],
+                usage: "[OPTION]... [ARGUMENT]...",
+            },
+            TestData {
+                args: vec![
+                    Arg::new(POSITIONAL_HANDLER_OPT),
+                    Arg::new('d').needs(Need::Nothing),
+                    Arg::new('e').needs(Need::Argument),
+                ],
+                usage: "[FLAG/OPTION]... [ARGUMENT]...",
+            },
+            //--------------------
+        ];
+
+        let mut writer = BufWriter::new();
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let mut handler = OkHandler::default();
+            let mut args = Args::default();
+
+            for arg in d.args.clone() {
+                args.add(arg);
+            }
+
+            let app = App::new("test").args(args).handler(Box::new(&mut handler));
+            let result = app.generate_help(&mut writer);
+            assert!(result.is_ok(), "{}", msg);
+
+            drop(app);
+
+            let value = writer.to_string();
+
+            assert!(value.contains(d.usage), "{}", msg);
+        }
     }
 
     #[test]

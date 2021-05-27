@@ -2376,8 +2376,6 @@ mod tests {
         assert!(re.is_match(&value));
     }
 
-    // FIXME: Test could be improved by checking to also ensure that the other
-    // forms of usage are not displayed!
     #[test]
     fn test_generate_help_usage() {
         #[derive(Debug)]
@@ -2389,55 +2387,55 @@ mod tests {
         let tests = &[
             TestData {
                 args: vec![Arg::new(POSITIONAL_HANDLER_OPT)],
-                usage: "[ARGUMENT]...",
+                usage: r#"\[ARGUMENT\]..."#,
             },
             //--------------------
             TestData {
                 args: vec![Arg::new('d')],
-                usage: "[FLAG]...",
+                usage: r#"\[FLAG\]..."#,
             },
             TestData {
                 args: vec![Arg::new('d'), Arg::new('e')],
-                usage: "[FLAG]...",
+                usage: r#"\[FLAG\]..."#,
             },
             TestData {
                 args: vec![Arg::new('d').required()],
-                usage: "[FLAG]...",
+                usage: r#"\[FLAG\]..."#,
             },
             TestData {
                 args: vec![Arg::new('d').required().needs(Need::Nothing)],
-                usage: "[FLAG]...",
+                usage: r#"\[FLAG\]..."#,
             },
             TestData {
                 args: vec![Arg::new('d').required().needs(Need::Nothing), Arg::new('e')],
-                usage: "[FLAG]...",
+                usage: r#"\[FLAG\]..."#,
             },
             TestData {
                 args: vec![Arg::new('d').needs(Need::Nothing), Arg::new('e')],
-                usage: "[FLAG]...",
+                usage: r#"\[FLAG\]..."#,
             },
             //--------------------
             TestData {
                 args: vec![Arg::new('a').needs(Need::Argument)],
-                usage: "[OPTION]...",
+                usage: r#"\[OPTION\]..."#,
             },
             TestData {
                 args: vec![
                     Arg::new('d').needs(Need::Argument),
                     Arg::new('e').needs(Need::Argument),
                 ],
-                usage: "[OPTION]...",
+                usage: r#"\[OPTION\]..."#,
             },
             TestData {
                 args: vec![Arg::new('d').needs(Need::Argument).required()],
-                usage: "[OPTION]...",
+                usage: r#"\[OPTION\]..."#,
             },
             TestData {
                 args: vec![
                     Arg::new('d').needs(Need::Argument).required(),
                     Arg::new('e').needs(Need::Argument),
                 ],
-                usage: "[OPTION]...",
+                usage: r#"\[OPTION\]..."#,
             },
             //--------------------
             TestData {
@@ -2445,21 +2443,21 @@ mod tests {
                     Arg::new('d').needs(Need::Nothing),
                     Arg::new('e').needs(Need::Argument),
                 ],
-                usage: "[FLAG/OPTION]...",
+                usage: r#"\[FLAG/OPTION\]..."#,
             },
             TestData {
                 args: vec![
                     Arg::new('d').needs(Need::Nothing),
                     Arg::new(POSITIONAL_HANDLER_OPT),
                 ],
-                usage: "[FLAG]... [ARGUMENT]...",
+                usage: r#"\[FLAG\]... \[ARGUMENT\]..."#,
             },
             TestData {
                 args: vec![
                     Arg::new(POSITIONAL_HANDLER_OPT),
                     Arg::new('e').needs(Need::Argument),
                 ],
-                usage: "[OPTION]... [ARGUMENT]...",
+                usage: r#"\[OPTION\]... \[ARGUMENT\]..."#,
             },
             TestData {
                 args: vec![
@@ -2467,7 +2465,7 @@ mod tests {
                     Arg::new('d').needs(Need::Nothing),
                     Arg::new('e').needs(Need::Argument),
                 ],
-                usage: "[FLAG/OPTION]... [ARGUMENT]...",
+                usage: r#"\[FLAG/OPTION\]... \[ARGUMENT\]..."#,
             },
             //--------------------
         ];
@@ -2484,7 +2482,8 @@ mod tests {
                 args.add(arg);
             }
 
-            let app = App::new("test").args(args).handler(Box::new(&mut handler));
+            let name = "test";
+            let app = App::new(name).args(args).handler(Box::new(&mut handler));
             let result = app.generate_help(&mut writer);
             assert!(result.is_ok(), "{}", msg);
 
@@ -2492,7 +2491,11 @@ mod tests {
 
             let value = writer.to_string();
 
-            assert!(value.contains(d.usage), "{}", msg);
+            let usage_re = format!(r"USAGE:\n\s+{}\s+{}\n", name, d.usage);
+
+            let re = Regex::new(&usage_re).unwrap();
+
+            assert!(re.is_match(&value), "{}", msg);
         }
     }
 

@@ -1,3 +1,5 @@
+[![docs.rs](https://docs.rs/ap/badge.svg)](https://docs.rs/ap/badge.svg)
+
 # ap - Argument Parser
 
 ## Overview

@@ -1,4 +1,4 @@
-[![docs.rs](https://docs.rs/ap/badge.svg)](https://docs.rs/ap/badge.svg)
+[![docs.rs](https://docs.rs/ap/badge.svg)](https://docs.rs/ap)
 
 # ap - Argument Parser
 
